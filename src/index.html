@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>transition-standalone · 使用示例</title>
+<style>
+  :root {
+    --bg: #0b0e11;
+    --panel: #12161b;
+    --line: #232a32;
+    --text: #e6ebf0;
+    --muted: #8b98a6;
+    --accent: #5ac8fa;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Microsoft YaHei", Roboto, sans-serif;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 16px;
+    padding: 16px;
+  }
+
+  /* ── 舞台：A 画面作为底层 DOM，canvas 绝对定位盖在上面 ── */
+  #stage {
+    position: relative;
+    overflow: hidden;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: #000;
+    min-height: 320px;
+  }
+  #layerA, #canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  #layerA { object-fit: cover; }
+  #canvas { pointer-events: none; }
+
+  #badge {
+    position: absolute;
+    left: 12px;
+    bottom: 12px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, .55);
+    backdrop-filter: blur(6px);
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: .04em;
+  }
+
+  #fallback {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    text-align: center;
+    padding: 24px;
+    color: #ffb4b4;
+  }
+
+  /* ── 控制面板 ── */
+  #panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px;
+    overflow: auto;
+  }
+  #panel h1 {
+    font-size: 15px;
+    margin: 0 0 4px;
+    letter-spacing: .02em;
+  }
+  #panel .sub {
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: 16px;
+  }
+  fieldset {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 12px 12px;
+    margin: 0 0 12px;
+  }
+  legend {
+    color: var(--muted);
+    font-size: 12px;
+    padding: 0 4px;
+  }
+  label.row {
+    display: block;
+    margin-bottom: 10px;
+  }
+  label.row:last-child { margin-bottom: 0; }
+  .row-head {
+    display: flex;
+    justify-content: space-between;
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: 4px;
+  }
+  .row-head b { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
+  select, input[type="file"] {
+    width: 100%;
+    background: #0d1116;
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font: inherit;
+    font-size: 13px;
+  }
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent);
+  }
+  input[type="checkbox"] { accent-color: var(--accent); }
+  .inline { display: flex; align-items: center; gap: 8px; }
+  button {
+    width: 100%;
+    padding: 7px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: #1a2028;
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  #info {
+    font-size: 12px;
+    color: var(--muted);
+    word-break: break-all;
+  }
+  #info b { color: var(--text); font-weight: 500; }
+
+  @media (max-width: 860px) {
+    body { grid-template-columns: minmax(0, 1fr); }
+    #stage { min-height: 46vh; }
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <img id="layerA" alt="A 画面">
+  <canvas id="canvas"></canvas>
+  <div id="badge">progress <span id="badgeValue">0.00</span></div>
+  <div id="fallback" hidden>
+    <strong>当前环境不支持 WebGL</strong>
+    <div>请在支持 WebGL 1.0 的浏览器中打开，或在代码中做降级处理。</div>
+  </div>
+</div>
+
+<aside id="panel">
+  <h1>transition-standalone</h1>
+  <div class="sub">8 种 WebGL 转场特效 · 实时预览</div>
+
+  <fieldset>
+    <legend>镜头模式</legend>
+    <label class="row">
+      <select id="mode"></select>
+    </label>
+    <label class="row">
+      <div class="row-head"><span>能量 energy</span><b id="energyValue">1.00</b></div>
+      <input id="energy" type="range" min="0.72" max="1.9" step="0.01" value="1">
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>过渡</legend>
+    <label class="row">
+      <div class="row-head"><span>进度 progress</span><b id="progressValue">0.00</b></div>
+      <input id="progress" type="range" min="0" max="1" step="0.001" value="0">
+    </label>
+    <label class="row inline">
+      <input id="autoplay" type="checkbox" checked>
+      <span>自动播放（乒乓）</span>
+    </label>
+    <button id="warm">预热 warm()</button>
+  </fieldset>
+
+  <fieldset>
+    <legend>素材</legend>
+    <label class="row">
+      <div class="row-head"><span>A 画面（起始）</span></div>
+      <input id="fileA" type="file" accept="image/*">
+    </label>
+    <label class="row">
+      <div class="row-head"><span>B 画面（目标）</span></div>
+      <input id="fileB" type="file" accept="image/*">
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>质量</legend>
+    <label class="row">
+      <select id="quality">
+        <option value="auto">自动检测</option>
+        <option value="high">high</option>
+        <option value="medium">medium</option>
+        <option value="low">low</option>
+      </select>
+    </label>
+  </fieldset>
+
+  <div id="info"></div>
+</aside>
+
+<script type="module">
+// 本示例默认引用构建产物。若用 Vite 等 TS 开发服务器，可改成：'./index.ts'
+import {
+  TransitionRenderer,
+  TransitionMode,
+  TRANSITION_MODE_LABELS,
+  detectQualityTier
+} from '../dist/index.js';
+
+const canvas = document.getElementById('canvas');
+const layerA = document.getElementById('layerA');
+const stage = document.getElementById('stage');
+const badgeValue = document.getElementById('badgeValue');
+const info = document.getElementById('info');
+const fallback = document.getElementById('fallback');
+
+const modeSelect = document.getElementById('mode');
+const progressInput = document.getElementById('progress');
+const progressValue = document.getElementById('progressValue');
+const energyInput = document.getElementById('energy');
+const energyValue = document.getElementById('energyValue');
+const autoplayInput = document.getElementById('autoplay');
+const warmButton = document.getElementById('warm');
+const qualitySelect = document.getElementById('quality');
+
+// ── 模式下拉：直接读取库导出的标签数组 ──────────────────────
+TRANSITION_MODE_LABELS.forEach((label, value) => {
+  const option = document.createElement('option');
+  option.value = String(value);
+  option.textContent = `${value} · ${label}`;
+  modeSelect.appendChild(option);
+});
+modeSelect.value = String(TransitionMode.RADIAL_BLOOM);
+
+// ── 生成两张内置素材（无需网络，避免跨域纹理上传失败）──────
+function makePattern(variant) {
+  const c = document.createElement('canvas');
+  c.width = 1280;
+  c.height = 720;
+  const g = c.getContext('2d');
+  const warm = variant === 'b';
+
+  const gradient = g.createLinearGradient(0, 0, c.width, c.height);
+  if (warm) {
+    gradient.addColorStop(0, '#3a1206');
+    gradient.addColorStop(0.5, '#c2540c');
+    gradient.addColorStop(1, '#ffd28a');
+  } else {
+    gradient.addColorStop(0, '#061a2e');
+    gradient.addColorStop(0.5, '#0f6ea8');
+    gradient.addColorStop(1, '#b8ecff');
+  }
+  g.fillStyle = gradient;
+  g.fillRect(0, 0, c.width, c.height);
+
+  g.globalAlpha = 0.16;
+  g.strokeStyle = '#fff';
+  g.lineWidth = 2;
+  for (let x = -c.height; x < c.width; x += 56) {
+    g.beginPath();
+    g.moveTo(x, 0);
+    g.lineTo(x + c.height, c.height);
+    g.stroke();
+  }
+
+  g.globalAlpha = 0.9;
+  g.fillStyle = 'rgba(0,0,0,.35)';
+  g.beginPath();
+  g.arc(c.width * (warm ? 0.72 : 0.3), c.height * 0.42, 190, 0, Math.PI * 2);
+  g.fill();
+
+  g.globalAlpha = 1;
+  g.fillStyle = '#fff';
+  g.font = '700 132px -apple-system, "Segoe UI", sans-serif';
+  g.textBaseline = 'middle';
+  g.fillText(warm ? 'B' : 'A', c.width * (warm ? 0.72 : 0.3) - 42, c.height * 0.42);
+  return c;
+}
+
+const builtinA = makePattern('a');
+const builtinB = makePattern('b');
+layerA.src = builtinA.toDataURL();
+
+// ── 初始化渲染器 ────────────────────────────────────────────
+const renderer = new TransitionRenderer(canvas);
+const gpu = detectQualityTier();
+
+if (!renderer.supported) {
+  fallback.hidden = false;
+  info.innerHTML = '<b>WebGL</b> 不可用，已降级为静态展示。';
+} else {
+  renderer.setMediaPair(builtinA, builtinB, 'builtin-a', 'builtin-b');
+  renderer.mode = Number(modeSelect.value);
+  renderer.warm(renderer.mode); // 预编译着色器，消除首次转场卡顿
+
+  info.innerHTML =
+    `<b>WebGL</b> 已就绪<br>` +
+    `<b>自动检测档位</b> ${gpu.tier}<br>` +
+    `<b>当前档位</b> <span id="tierNow">${renderer.getQuality()}</span>`;
+}
+
+// ── 交互 ────────────────────────────────────────────────────
+let progress = 0;
+let direction = 1;
+let holdMs = 0;
+let lastTime = 0;
+const DURATION_MS = 1600; // 单向跑完一遍的时长
+
+modeSelect.addEventListener('change', () => {
+  renderer.mode = Number(modeSelect.value);
+  renderer.warm(renderer.mode);
+});
+
+energyInput.addEventListener('input', () => {
+  renderer.energy = Number(energyInput.value);
+  energyValue.textContent = renderer.energy.toFixed(2);
+});
+
+progressInput.addEventListener('input', () => {
+  autoplayInput.checked = false;
+  progress = Number(progressInput.value);
+  direction = progress >= 1 ? -1 : 1;
+});
+
+qualitySelect.addEventListener('change', () => {
+  const value = qualitySelect.value;
+  renderer.setQuality(value === 'auto' ? gpu.tier : value);
+  const now = document.getElementById('tierNow');
+  if (now) now.textContent = renderer.getQuality();
+});
+
+warmButton.addEventListener('click', () => renderer.warm(renderer.mode));
+
+function bindUpload(input, slot) {
+  input.addEventListener('change', async () => {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const key = `${slot}-${file.name}-${file.lastModified}`;
+    if (slot === 'a') {
+      renderer.setMediaA(img, key);
+      layerA.src = url; // 底层 DOM 与纹理 A 保持一致
+    } else {
+      renderer.setMediaB(img, key);
+    }
+  });
+}
+bindUpload(document.getElementById('fileA'), 'a');
+bindUpload(document.getElementById('fileB'), 'b');
+
+window.addEventListener('resize', () => renderer.resize());
+
+// ── 渲染循环 ────────────────────────────────────────────────
+function loop(now) {
+  const dt = lastTime ? Math.min(now - lastTime, 50) : 16;
+  lastTime = now;
+
+  if (autoplayInput.checked && renderer.supported) {
+    if (holdMs > 0) {
+      holdMs -= dt;
+    } else {
+      progress += (direction * dt) / DURATION_MS;
+      if (progress >= 1) {
+        progress = 1;
+        direction = -1;
+        holdMs = 420;
+      } else if (progress <= 0) {
+        progress = 0;
+        direction = 1;
+        holdMs = 420;
+      }
+    }
+    progressInput.value = String(progress);
+  }
+
+  progressValue.textContent = progress.toFixed(2);
+  badgeValue.textContent = progress.toFixed(2);
+
+  // 未设置 time 也可渲染，但噪声动画会静止；这里用 rAF 时间戳驱动
+  renderer.render({ progress, time: now });
+
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

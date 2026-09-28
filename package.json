@@ -1,0 +1,36 @@
+{
+  "name": "transition-standalone",
+  "version": "0.1.0",
+  "description": "8 种 WebGL 转场特效独立封装，零依赖，一个 canvas + 两张图即可使用",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": ["dist"],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --clean",
+    "dev": "tsup src/index.ts --format esm,cjs --dts --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": ["webgl", "transition", "shader", "canvas", "effect", "glsl"],
+  "license": "MIT",
+  "author": "wzbin10 <wzbin1026@163.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wzbin10/transition-standalone.git"
+  },
+  "bugs": "https://github.com/wzbin10/transition-standalone/issues",
+  "homepage": "https://github.com/wzbin10/transition-standalone#readme",
+  "devDependencies": {
+    "tsup": "^8.3.5",
+    "typescript": "^5.6.3"
+  }
+}
